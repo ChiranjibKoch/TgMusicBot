@@ -193,6 +193,7 @@ func handleMedia(c *td.Client, m *td.Message, updater *td.Message, dlMsg *td.Mes
 	}
 
 	file, err = dlMsg.Download(c, 1, 0, 0, true)
+
 	if err != nil {
 		cache.ChatCache.RemoveCurrentSong(chatId)
 		_, err = updater.EditText(c, fmt.Sprintf("Download failed: %s", err.Error()), nil)
@@ -213,10 +214,37 @@ func handleMedia(c *td.Client, m *td.Message, updater *td.Message, dlMsg *td.Mes
 		return err
 	}
 
+	caption := core.BuildNowPlayingCaption(&saveCache)
+	if saveCache.Thumbnail != "" {
+		_ = updater.Delete(c, true)
+		_, err = m.ReplyPhoto(c, td.InputFileRemote{Id: saveCache.Thumbnail}, &td.SendPhotoOpts{
+			Caption:     caption,
+			ParseMode:   "HTML",
+			ReplyMarkup: core.ControlButtons("play"),
+		})
+		if err == nil {
+			return nil
+		}
+		// Photo failed after deleting updater – send a new text reply
+		escURL := html.EscapeString(saveCache.URL)
+		escName := html.EscapeString(saveCache.Name)
+		escUser := html.EscapeString(saveCache.User)
+		nowPlaying := fmt.Sprintf(
+			"<u><b>| Started streaming</b></u>\n\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Duration:</b> %s min\n<b>Requested by:</b> %s",
+			escURL, escName, utils.SecToMin(saveCache.Duration), escUser,
+		)
+		_, err = m.ReplyText(c, nowPlaying, &td.SendTextMessageOpts{
+			ParseMode:             "HTML",
+			ReplyMarkup:           core.ControlButtons("play"),
+			DisableWebPagePreview: true,
+		})
+		return err
+	}
+
+	// No thumbnail – edit the existing updater message
 	escURL := html.EscapeString(saveCache.URL)
 	escName := html.EscapeString(saveCache.Name)
 	escUser := html.EscapeString(saveCache.User)
-
 	nowPlaying := fmt.Sprintf(
 		"<u><b>| Started streaming</b></u>\n\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Duration:</b> %s min\n<b>Requested by:</b> %s",
 		escURL, escName, utils.SecToMin(saveCache.Duration), escUser,
@@ -282,6 +310,29 @@ func handleSingleTrack(c *td.Client, m *td.Message, updater *td.Message, song ut
 
 	qLen := cache.ChatCache.AddSong(chatId, &saveCache)
 	if qLen > 1 {
+		queueCaption := core.BuildQueueCaption(&saveCache, qLen)
+		if saveCache.Thumbnail != "" {
+			_ = updater.Delete(c, true)
+			_, err := m.ReplyPhoto(c, td.InputFileRemote{Id: saveCache.Thumbnail}, &td.SendPhotoOpts{
+				Caption:     queueCaption,
+				ParseMode:   "HTML",
+				ReplyMarkup: core.ControlButtons("play"),
+			})
+			if err == nil {
+				return nil
+			}
+			// Photo failed after deleting updater – send a new text reply
+			escURL := html.EscapeString(saveCache.URL)
+			escName := html.EscapeString(saveCache.Name)
+			escUser := html.EscapeString(saveCache.User)
+			queueInfo := fmt.Sprintf(
+				"<u><b>Added to queue: %d</b></u>\n\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Duration:</b> %s min\n<b>Requested by:</b> %s",
+				qLen, escURL, escName, utils.SecToMin(saveCache.Duration), escUser,
+			)
+			_, err = m.ReplyText(c, queueInfo, &td.SendTextMessageOpts{ReplyMarkup: core.ControlButtons("play"), ParseMode: "HTML", DisableWebPagePreview: true})
+			return err
+		}
+		// No thumbnail – edit the existing updater message
 		escURL := html.EscapeString(saveCache.URL)
 		escName := html.EscapeString(saveCache.Name)
 		escUser := html.EscapeString(saveCache.User)
@@ -289,7 +340,6 @@ func handleSingleTrack(c *td.Client, m *td.Message, updater *td.Message, song ut
 			"<u><b>Added to queue: %d</b></u>\n\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Duration:</b> %s min\n<b>Requested by:</b> %s",
 			qLen, escURL, escName, utils.SecToMin(saveCache.Duration), escUser,
 		)
-
 		_, err := updater.EditText(c, queueInfo, &td.EditTextMessageOpts{ReplyMarkup: core.ControlButtons("play"), ParseMode: "HTML", DisableWebPagePreview: true})
 		return err
 	}
@@ -311,15 +361,41 @@ func handleSingleTrack(c *td.Client, m *td.Message, updater *td.Message, song ut
 		return err
 	}
 
-	escURLnp := html.EscapeString(saveCache.URL)
-	escNamenp := html.EscapeString(saveCache.Name)
-	escUsernp := html.EscapeString(saveCache.User)
+	caption := core.BuildNowPlayingCaption(&saveCache)
+	if saveCache.Thumbnail != "" {
+		_ = updater.Delete(c, true)
+		_, err := m.ReplyPhoto(c, td.InputFileRemote{Id: saveCache.Thumbnail}, &td.SendPhotoOpts{
+			Caption:     caption,
+			ParseMode:   "HTML",
+			ReplyMarkup: core.ControlButtons("play"),
+		})
+		if err == nil {
+			return nil
+		}
+		// Photo failed after deleting updater – send a new text reply
+		escURL := html.EscapeString(saveCache.URL)
+		escName := html.EscapeString(saveCache.Name)
+		escUser := html.EscapeString(saveCache.User)
+		nowPlaying := fmt.Sprintf(
+			"<u><b>| Started streaming</b></u>\n\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Duration:</b> %s min\n<b>Requested by:</b> %s",
+			escURL, escName, utils.SecToMin(song.Duration), escUser,
+		)
+		_, err = m.ReplyText(c, nowPlaying, &td.SendTextMessageOpts{
+			ReplyMarkup:           core.ControlButtons("play"),
+			ParseMode:             "HTML",
+			DisableWebPagePreview: true,
+		})
+		return err
+	}
 
+	// No thumbnail – edit the existing updater message
+	escURL := html.EscapeString(saveCache.URL)
+	escName := html.EscapeString(saveCache.Name)
+	escUser := html.EscapeString(saveCache.User)
 	nowPlaying := fmt.Sprintf(
 		"<u><b>| Started streaming</b></u>\n\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Duration:</b> %s min\n<b>Requested by:</b> %s",
-		escURLnp, escNamenp, utils.SecToMin(song.Duration), escUsernp,
+		escURL, escName, utils.SecToMin(song.Duration), escUser,
 	)
-
 	_, err := updater.EditText(c, nowPlaying, &td.EditTextMessageOpts{
 		ReplyMarkup:           core.ControlButtons("play"),
 		ParseMode:             "HTML",
